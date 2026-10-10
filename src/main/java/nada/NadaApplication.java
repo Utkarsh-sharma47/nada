@@ -28,7 +28,10 @@ public final class NadaApplication {
             return;
         }
         Runtime.getRuntime().addShutdownHook(new Thread(server::stop, "nada-shutdown"));
-        System.out.println("Nada server listening on http://localhost:" + server.port());
+        int listening = server.port();
+        System.out.println("Nada server listening on http://localhost:" + listening);
+        System.out.println("UI:  http://localhost:" + listening + "/");
+        System.out.println("API: http://localhost:" + listening);
     }
 
     /**

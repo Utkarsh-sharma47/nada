@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NADA</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%231f4b73'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+  <header class="top">
+    <div>
+      <h1>NADA</h1>
+      <p class="lede">People, mutual connections, and shortest-path lookup.</p>
+    </div>
+    <div class="status" role="status" aria-live="polite">
+      <span id="status-dot" class="dot" aria-hidden="true"></span>
+      <span id="status-text">Checking the API…</span>
+      <span id="base-url" class="base-url"></span>
+    </div>
+  </header>
+
+  <noscript>
+    <p class="banner">This page needs JavaScript to call the API.</p>
+  </noscript>
+
+  <main class="layout">
+    <section aria-labelledby="create-heading">
+      <h2 id="create-heading">Create a person</h2>
+      <p class="hint">The server assigns the id and stores the name exactly as sent.</p>
+      <form id="create-person">
+        <label for="person-name">Person name</label>
+        <div class="actions">
+          <input id="person-name" name="name" type="text" autocomplete="off" spellcheck="false" aria-required="true">
+          <button type="submit">Create</button>
+        </div>
+        <p id="create-feedback" class="feedback" role="status"></p>
+        <pre id="create-response" class="response">No request yet.</pre>
+      </form>
+    </section>
+
+    <section aria-labelledby="people-heading">
+      <h2 id="people-heading">People and direct contacts</h2>
+      <p class="hint">People created in this browser session. This is not the server's complete database. Server-side state remains authoritative.</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">ID</th>
+              <th scope="col">Name</th>
+              <th scope="col">Contacts</th>
+            </tr>
+          </thead>
+          <tbody id="people-body"></tbody>
+        </table>
+      </div>
+      <button id="clear-session" type="button" class="ghost">Clear local list</button>
+      <p class="hint">Clearing the list does not delete people on the server.</p>
+
+      <form id="contacts-form">
+        <label for="contacts-id">Person ID</label>
+        <div class="actions">
+          <input id="contacts-id" name="id" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" aria-required="true">
+          <button type="submit">Load contacts</button>
+        </div>
+        <p id="contacts-feedback" class="feedback" role="status"></p>
+        <ul id="contacts-list" class="contacts"></ul>
+        <pre id="contacts-response" class="response">No request yet.</pre>
+      </form>
+    </section>
+
+    <section aria-labelledby="knows-heading">
+      <h2 id="knows-heading">Mutual connection</h2>
+      <p class="hint">A connection is mutual. Connecting A to B also connects B to A. Repeating the pair is safe.</p>
+      <form id="knows-form">
+        <div class="pair">
+          <div>
+            <label for="knows-a">Person A</label>
+            <input id="knows-a" name="a" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" aria-required="true">
+          </div>
+          <div>
+            <label for="knows-b">Person B</label>
+            <input id="knows-b" name="b" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" aria-required="true">
+          </div>
+        </div>
+        <div class="actions">
+          <button type="submit">Connect</button>
+        </div>
+        <p id="knows-feedback" class="feedback" role="status"></p>
+        <pre id="knows-response" class="response">No request yet.</pre>
+      </form>
+    </section>
+
+    <section aria-labelledby="path-heading">
+      <h2 id="path-heading">Shortest path</h2>
+      <p class="hint">The drawing uses the server's result. Paths longer than three hops are not connected.</p>
+      <form id="path-form">
+        <div class="pair">
+          <div>
+            <label for="path-from">From</label>
+            <input id="path-from" name="from" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" aria-required="true">
+          </div>
+          <div>
+            <label for="path-to">To</label>
+            <input id="path-to" name="to" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" aria-required="true">
+          </div>
+        </div>
+        <div class="actions">
+          <button type="submit">Find path</button>
+        </div>
+        <p id="path-summary" class="feedback" role="status"></p>
+        <ol id="path-nodes" class="path" aria-label="Shortest path"></ol>
+        <pre id="path-response" class="response">No request yet.</pre>
+      </form>
+    </section>
+
+    <section class="span-2" aria-labelledby="inspector-heading">
+      <h2 id="inspector-heading">Last response</h2>
+      <dl class="inspector">
+        <div>
+          <dt>Method</dt>
+          <dd id="inspector-method">—</dd>
+        </div>
+        <div>
+          <dt>Endpoint</dt>
+          <dd id="inspector-endpoint">—</dd>
+        </div>
+        <div>
+          <dt>Status</dt>
+          <dd id="inspector-status">—</dd>
+        </div>
+      </dl>
+      <pre id="inspector-body" class="response">No request yet.</pre>
+    </section>
+  </main>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

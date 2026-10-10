@@ -467,6 +467,59 @@ class ApiServerTest {
         }
     }
 
+    @Nested
+    class Ui {
+
+        @Test
+        void servesTheHomepageAndStaticAssets() throws Exception {
+            HttpResult page = getRaw("/");
+
+            assertEquals(200, page.status);
+            assertEquals("text/html; charset=UTF-8", page.contentType);
+            assertTrue(page.rawBody.contains("<h1>NADA</h1>"));
+            assertTrue(page.rawBody.contains("People, mutual connections, and shortest-path lookup."));
+            assertTrue(page.rawBody.contains("this browser session"));
+            assertTrue(page.rawBody.contains("Server-side state remains authoritative."));
+            assertTrue(page.rawBody.contains("href=\"/assets/app.css\""));
+            assertTrue(page.rawBody.contains("src=\"/assets/app.js\""));
+
+            HttpResult css = getRaw("/assets/app.css");
+            assertEquals(200, css.status);
+            assertEquals("text/css; charset=UTF-8", css.contentType);
+            assertTrue(css.rawBody.contains(".path"));
+
+            HttpResult script = getRaw("/assets/app.js");
+            assertEquals(200, script.status);
+            assertEquals("text/javascript; charset=UTF-8", script.contentType);
+            assertTrue(script.rawBody.contains("textContent"));
+            assertTrue(script.rawBody.contains("\"/people\""));
+            assertTrue(script.rawBody.contains("\"/knows\""));
+            assertTrue(script.rawBody.contains("\"/path\""));
+            assertFalse(script.rawBody.contains("innerHTML"));
+            assertFalse(script.rawBody.contains("insertAdjacentHTML"));
+            assertFalse(script.rawBody.contains("document.write"));
+            assertFalse(script.rawBody.contains("outerHTML"));
+
+            HttpResult slashed = getRaw("/assets/app.css/");
+            assertEquals(200, slashed.status);
+            assertEquals("text/css; charset=UTF-8", slashed.contentType);
+        }
+
+        @Test
+        void keepsUnknownRoutesAsJsonErrors() throws Exception {
+            assertError(404, "not found", get("/no-such-route"));
+            assertError(404, "not found", get("/assets/missing.js"));
+            assertError(404, "not found", get("/static/index.html"));
+            assertError(405, "method not allowed", post("/", "{\"name\":\"Asha\"}"));
+            assertError(405, "method not allowed", post("/assets/app.js", "{}"));
+            assertError(405, "method not allowed", get("/people"));
+
+            HttpResult created = post("/people", "{\"name\":\"आशा\"}");
+            assertEquals(201, created.status);
+            assertEquals("आशा", created.body.get("name").asText());
+        }
+    }
+
     private long create(String name) throws Exception {
         return post("/people", "{\"name\":" + JSON.writeValueAsString(name) + "}").body.get("id").asLong();
     }
@@ -490,6 +543,16 @@ class ApiServerTest {
                 .GET()
                 .build();
         return send(request);
+    }
+
+    private HttpResult getRaw(String path) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(uri(path))
+                .timeout(Duration.ofSeconds(3))
+                .GET()
+                .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        String contentType = response.headers().firstValue("content-type").orElse("");
+        return new HttpResult(response.statusCode(), response.body(), contentType, null);
     }
 
     private HttpResult send(HttpRequest request) throws Exception {

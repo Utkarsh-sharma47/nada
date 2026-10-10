@@ -30,13 +30,19 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * JDK HTTP server for the four assignment endpoints. Invalid application input becomes a JSON
- * error response and does not stop the process.
+ * JDK HTTP server for the assignment API and the local testing page.
+ * Invalid application input becomes a JSON error response and does not stop the process.
+ * Only {@code /} and the two asset paths are files. Every other unknown route stays a JSON 404.
  */
 public final class ApiServer {
 
     private static final Pattern CONTACTS = Pattern.compile("^/people/([^/]+)/contacts$");
     private static final Pattern INTEGER = Pattern.compile("[+-]?\\d+");
+    private static final Map<String, StaticFile> STATIC_FILES = Map.of(
+            "/", new StaticFile("/static/index.html", "text/html; charset=UTF-8"),
+            "/assets/app.css", new StaticFile("/static/app.css", "text/css; charset=UTF-8"),
+            "/assets/app.js", new StaticFile("/static/app.js", "text/javascript; charset=UTF-8")
+    );
 
     private final HttpServer server;
     private final ExecutorService executor;
@@ -133,7 +139,32 @@ public final class ApiServer {
             listContacts(exchange, contacts.group(1));
             return;
         }
+
+        StaticFile file = STATIC_FILES.get(path);
+        if (file != null) {
+            if (!"GET".equals(method)) {
+                throw new ApiException(405, "method not allowed");
+            }
+            serveStatic(exchange, file);
+            return;
+        }
         throw NotFoundException.route();
+    }
+
+    private void serveStatic(HttpExchange exchange, StaticFile file) throws IOException {
+        byte[] payload;
+        try (InputStream input = ApiServer.class.getResourceAsStream(file.resource())) {
+            if (input == null) {
+                throw NotFoundException.route();
+            }
+            payload = input.readAllBytes();
+        }
+        exchange.getResponseHeaders().set("Content-Type", file.contentType());
+        exchange.getResponseHeaders().set("Cache-Control", "no-cache");
+        exchange.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
+        exchange.sendResponseHeaders(200, payload.length);
+        exchange.getResponseBody().write(payload);
+        exchange.close();
     }
 
     private void createPerson(HttpExchange exchange) throws IOException {
@@ -295,5 +326,8 @@ public final class ApiServer {
         } catch (Exception exception) {
             exchange.close();
         }
+    }
+
+    private record StaticFile(String resource, String contentType) {
     }
 }

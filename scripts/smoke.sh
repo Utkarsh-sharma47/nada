@@ -63,6 +63,23 @@ expect_code() {
   fi
 }
 
+expect_code 200 "$base/"
+grep -q '<h1>NADA</h1>' "$body"
+grep -q 'shortest-path lookup' "$body"
+grep -q 'src="/assets/app.js"' "$body"
+
+expect_code 200 "$base/assets/app.css"
+grep -q '.path' "$body"
+
+expect_code 200 "$base/assets/app.js"
+grep -q 'textContent' "$body"
+grep -q '"/people"' "$body"
+
+expect_code 404 "$base/no-such-route"
+grep -q '"error":"not found"' "$body"
+expect_code 405 "$base/people"
+grep -q 'method not allowed' "$body"
+
 expect_code 201 -X POST "$base/people" -H 'Content-Type: application/json' -d '{"name":"Asha"}'
 grep -q '"id":1' "$body"
 grep -q '"name":"Asha"' "$body"
