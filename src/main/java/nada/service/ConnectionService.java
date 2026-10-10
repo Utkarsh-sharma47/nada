@@ -6,6 +6,7 @@ import nada.model.Person;
 import nada.repository.InMemoryNetworkRepository;
 
 import java.util.List;
+import java.util.OptionalLong;
 
 public final class ConnectionService {
 
@@ -23,11 +24,9 @@ public final class ConnectionService {
         if (a == b) {
             throw new BadRequestException("a person cannot be connected to themselves");
         }
-        if (!repository.connect(a, b)) {
-            if (!repository.contains(a)) {
-                throw NotFoundException.person(a);
-            }
-            throw NotFoundException.person(b);
+        OptionalLong missing = repository.connect(a, b);
+        if (missing.isPresent()) {
+            throw NotFoundException.person(missing.getAsLong());
         }
     }
 

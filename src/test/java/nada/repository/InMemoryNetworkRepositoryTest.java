@@ -12,7 +12,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class InMemoryNetworkRepositoryTest {
@@ -34,9 +33,9 @@ class InMemoryNetworkRepositoryTest {
         repository.insert("Asha");
         repository.insert("Rohan");
 
-        assertTrue(repository.connect(1L, 2L));
-        assertTrue(repository.connect(1L, 2L));
-        assertTrue(repository.connect(2L, 1L));
+        assertTrue(repository.connect(1L, 2L).isEmpty());
+        assertTrue(repository.connect(1L, 2L).isEmpty());
+        assertTrue(repository.connect(2L, 1L).isEmpty());
 
         assertEquals(List.of(2L), ids(repository.contactsOf(1L).orElseThrow()));
         assertEquals(List.of(1L), ids(repository.contactsOf(2L).orElseThrow()));
@@ -53,8 +52,9 @@ class InMemoryNetworkRepositoryTest {
 
         assertEquals(List.of(3L, 2L), ids(repository.contactsOf(1L).orElseThrow()));
         assertEquals(List.of(1L), ids(repository.contactsOf(2L).orElseThrow()));
-        assertFalse(repository.connect(1L, 9L));
-        assertFalse(repository.connect(8L, 9L));
+        assertEquals(9L, repository.connect(1L, 9L).getAsLong());
+        assertEquals(8L, repository.connect(8L, 9L).getAsLong());
+        assertEquals(9L, repository.connect(9L, 1L).getAsLong());
         assertTrue(repository.contactsOf(9L).isEmpty());
         assertEquals(List.of(1L), ids(repository.contactsOf(2L).orElseThrow()));
     }

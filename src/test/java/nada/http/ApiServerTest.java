@@ -100,10 +100,12 @@ class ApiServerTest {
             assertError(400, "invalid JSON", post("/people", ""));
             assertError(400, "invalid JSON", post("/people", "[]"));
             assertError(400, "invalid JSON", post("/people", "null"));
+            assertError(400, "invalid JSON", post("/people", "{\"name\":\"Asha\"}{\"name\":\"Other\"}"));
 
             HttpResult created = post("/people", "{\"name\":\"Asha\"}");
             assertEquals(201, created.status);
             assertEquals(1L, created.body.get("id").asLong());
+            assertEquals(201, post("/people", "{\"name\":\"Rohan\"}\n").status);
         }
     }
 
@@ -148,6 +150,7 @@ class ApiServerTest {
             post("/people", "{\"name\":\"Asha\"}");
 
             assertError(400, "invalid JSON", post("/knows", "{"));
+            assertError(400, "invalid JSON", post("/knows", "{\"a\":1,\"b\":2} junk"));
             assertError(400, "b is required", post("/knows", "{\"a\":1}"));
             assertError(400, "a is required", post("/knows", "{\"b\":2}"));
             assertError(400, "a must be an integer", post("/knows", "{\"a\":\"1\",\"b\":2}"));

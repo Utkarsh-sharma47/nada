@@ -8,6 +8,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.function.Function;
 
 /**
@@ -61,26 +62,23 @@ public final class InMemoryNetworkRepository {
         }
     }
 
-    public boolean contains(long id) {
-        synchronized (lock) {
-            return people.containsKey(id);
-        }
-    }
-
     /**
      * Records an undirected connection. Repeating the same pair, in either direction, leaves the
-     * graph unchanged. Returns false when either person is missing and does not write an edge.
+     * graph unchanged. When either person is missing, no edge is written and the returned id is
+     * the one that was missing, with {@code a} preferred if both were. That choice is made under
+     * the same lock as the update, so a concurrent create cannot change which id is reported.
      */
-    public boolean connect(long a, long b) {
+    public OptionalLong connect(long a, long b) {
         synchronized (lock) {
-            LinkedHashSet<Long> aContacts = contacts.get(a);
-            LinkedHashSet<Long> bContacts = contacts.get(b);
-            if (aContacts == null || bContacts == null) {
-                return false;
+            if (!people.containsKey(a)) {
+                return OptionalLong.of(a);
             }
-            aContacts.add(b);
-            bContacts.add(a);
-            return true;
+            if (!people.containsKey(b)) {
+                return OptionalLong.of(b);
+            }
+            contacts.get(a).add(b);
+            contacts.get(b).add(a);
+            return OptionalLong.empty();
         }
     }
 

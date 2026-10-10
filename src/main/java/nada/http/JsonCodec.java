@@ -2,6 +2,7 @@ package nada.http;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import nada.error.BadRequestException;
@@ -9,7 +10,8 @@ import nada.error.BadRequestException;
 public final class JsonCodec {
 
     private static final ObjectMapper MAPPER = new ObjectMapper()
-            .setSerializationInclusion(JsonInclude.Include.NON_NULL);
+            .setSerializationInclusion(JsonInclude.Include.NON_NULL)
+            .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
 
     private JsonCodec() {
     }
