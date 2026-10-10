@@ -81,32 +81,43 @@ Breadth-first search finds a shortest path in an unweighted graph. Nodes at dept
 
 ## Prerequisites
 
-- JDK 17 or newer (`java` and `javac` on your `PATH`)
-- Maven 3.9 or newer
+- JDK 17 or newer (`java` and `javac` on your `PATH`). A JRE is not enough.
+- `curl`, for the smoke script.
+- Git.
 
-Check both:
+Maven itself does not need to be installed. `./mvnw` downloads Maven 3.9.9 on first use.
+
+Check the JDK:
 
 ```bash
 java -version
-mvn -version
+javac -version
 ```
+
+`make setup` runs the same check and prints the wrapper's Maven version.
 
 ## Build and run
 
 From the repository root:
 
 ```bash
-mvn -q package
+./mvnw -B -DskipTests package
 java -jar target/nada.jar
 ```
 
-The server listens on port **8080** and prints:
+`./mvnw -B package` runs the tests before building the jar. The server listens on port **8080** and prints:
 
 ```text
 Nada server listening on http://localhost:8080
 ```
 
-Stop it with Ctrl+C. The shutdown hook closes the server.
+Stop it with Ctrl+C. The shutdown hook closes the server. People and connections are stored in memory, so a restart clears them.
+
+If port 8080 is already taken, the process prints `Could not start server on port 8080: Address already in use` and exits. Start it on another port:
+
+```bash
+java -jar target/nada.jar 9090
+```
 
 ### Port
 
@@ -119,33 +130,34 @@ PORT=9090 java -jar target/nada.jar
 
 `java -jar target/nada.jar 9090` uses 9090 even if `PORT` is set. An invalid port prints `Port must be an integer between 0 and 65535` and exits with status 1.
 
-`mvn -q package` runs the tests before building the jar. Use `mvn -q -DskipTests package` when you only want the jar.
+### Make targets
+
+| Target | What it does |
+| --- | --- |
+| `make setup` | Checks for a JDK and prints `./mvnw -version` |
+| `make build` | Packages `target/nada.jar` without tests |
+| `make test` | Runs the JUnit suite |
+| `make verify` | Clean verify, including tests |
+| `make run` | Builds the jar and starts the server on port 8080 |
+| `make smoke` | Builds the jar and runs `scripts/smoke.sh` |
+| `make clean` | Deletes `target/` |
 
 ## Tests
 
-Unit tests and HTTP tests are one JUnit 5 suite.
+JUnit 5 starts its own servers. You do not need a server running for `make test`.
 
 ```bash
-mvn test
+./mvnw -B test
+./mvnw -B verify
 ```
 
-Repository and service tests:
+HTTP integration tests bind an ephemeral port:
 
 ```bash
-mvn -Dtest=InMemoryNetworkRepositoryTest,NetworkServiceTest,NadaApplicationTest test
+./mvnw -B -Dtest=ApiServerTest test
 ```
 
-HTTP integration tests, which start a real server on an ephemeral port:
-
-```bash
-mvn -Dtest=ApiServerTest test
-```
-
-Clean build plus the full suite:
-
-```bash
-mvn clean verify
-```
+`make smoke` is separate. It starts `target/nada.jar` on port 18080 (or `PORT`), calls the four endpoints with `curl`, then stops only the process it started. The JUnit suite does not use that script.
 
 ## API
 
@@ -332,6 +344,13 @@ People and connections live in the process heap. Restarting the server drops all
 - Make the hop limit configurable and paginate large contact lists.
 - Add a focused load test around id allocation and connection updates.
 
+## Troubleshooting
+
+- `java` works but `javac` does not: install a JDK, not only a JRE.
+- `Address already in use`: another process owns that port. Use `java -jar target/nada.jar 9090`.
+- `./mvnw` fails on first run: it needs network access once to download Maven into `~/.m2/wrapper`.
+- Smoke test says the port is in use: `PORT=18081 make smoke`.
+
 ## AI tools
 
-Cursor's coding assistant (Auto) wrote this service, its tests, and this README from the assignment brief. The behavior was checked with `mvn test`, `mvn clean verify`, and manual `curl` requests against a running server. Failures from those runs were fixed before the code was committed.
+Cursor's coding assistant (Auto) wrote this service, its tests, the Maven wrapper setup, the Makefile, the smoke script, and this README from the assignment brief. Behavior was checked with `./mvnw -B test`, `./mvnw -B verify`, and `scripts/smoke.sh`. Failures from those runs were fixed before the corresponding commits.
