@@ -1,0 +1,16 @@
+target/
+Nada-Backend-Intern-Task.pdf
+.agent-qa/
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+.vscode/
+*.log
+.env
+.env.*
+.DS_Store
+*.swp
+hs_err_pid*
+replay_pid*
