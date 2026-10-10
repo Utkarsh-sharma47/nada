@@ -17,6 +17,7 @@ if command -v ss >/dev/null 2>&1 && ss -ltn | grep -q ":${port} "; then
 fi
 
 log=$(mktemp)
+body=$(mktemp)
 java -jar target/nada.jar "$port" >"$log" 2>&1 &
 pid=$!
 
@@ -25,7 +26,7 @@ cleanup() {
     kill "$pid" 2>/dev/null || true
     wait "$pid" 2>/dev/null || true
   fi
-  rm -f "$log"
+  rm -f "$log" "$body"
 }
 trap cleanup EXIT
 
@@ -54,17 +55,17 @@ expect_code() {
   local expected=$1
   shift
   local actual
-  actual=$(curl -sS -o /tmp/nada-smoke-body -w "%{http_code}" "$@")
+  actual=$(curl -sS -o "$body" -w "%{http_code}" "$@")
   if [[ "$actual" != "$expected" ]]; then
     echo "Expected HTTP ${expected}, got ${actual}: $*" >&2
-    cat /tmp/nada-smoke-body >&2
+    cat "$body" >&2
     exit 1
   fi
 }
 
 expect_code 201 -X POST "$base/people" -H 'Content-Type: application/json' -d '{"name":"Asha"}'
-grep -q '"id":1' /tmp/nada-smoke-body
-grep -q '"name":"Asha"' /tmp/nada-smoke-body
+grep -q '"id":1' "$body"
+grep -q '"name":"Asha"' "$body"
 
 expect_code 201 -X POST "$base/people" -H 'Content-Type: application/json' -d '{"name":"B"}'
 expect_code 201 -X POST "$base/people" -H 'Content-Type: application/json' -d '{"name":"C"}'
@@ -73,7 +74,7 @@ expect_code 201 -X POST "$base/people" -H 'Content-Type: application/json' -d '{
 
 expect_code 400 -X POST "$base/people" -H 'Content-Type: application/json' -d '{"name":"Asha"}{"name":"Other"}'
 expect_code 201 -X POST "$base/people" -H 'Content-Type: application/json' --data-binary $'{"name":"आशा"}\n'
-grep -q 'आशा' /tmp/nada-smoke-body
+grep -q 'आशा' "$body"
 
 expect_code 204 -X POST "$base/knows" -H 'Content-Type: application/json' -d '{"a":1,"b":2}'
 expect_code 204 -X POST "$base/knows" -H 'Content-Type: application/json' -d '{"a":2,"b":3}'
@@ -82,16 +83,16 @@ expect_code 204 -X POST "$base/knows" -H 'Content-Type: application/json' -d '{"
 expect_code 400 -X POST "$base/knows" -H 'Content-Type: application/json' -d '{"a":1,"b":1}'
 
 expect_code 200 "$base/people/1/contacts"
-grep -q '"name":"B"' /tmp/nada-smoke-body
+grep -q '"name":"B"' "$body"
 
 expect_code 200 "$base/path?from=1&to=4"
-grep -q '"hops":3' /tmp/nada-smoke-body
+grep -q '"hops":3' "$body"
 expect_code 200 "$base/path?from=1&to=5"
-grep -q '"connected":false' /tmp/nada-smoke-body
+grep -q '"connected":false' "$body"
 expect_code 200 "$base/path?from=1&to=1"
-grep -q '"hops":0' /tmp/nada-smoke-body
+grep -q '"hops":0' "$body"
 expect_code 404 "$base/people/9/contacts"
-grep -q 'no person 9' /tmp/nada-smoke-body
+grep -q 'no person 9' "$body"
 expect_code 400 "$base/path?from=abc&to=1"
 
 echo "Smoke test passed on ${base}"
