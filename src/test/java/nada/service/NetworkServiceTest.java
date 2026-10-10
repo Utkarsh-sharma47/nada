@@ -10,7 +10,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.ArrayDeque;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -179,5 +182,89 @@ class NetworkServiceTest {
         assertTrue(done.await(2, TimeUnit.SECONDS));
         assertEquals("no person 2", error.get().getMessage());
         assertEquals(List.of(), connections.contacts(1L));
+    }
+
+    @Test
+    void checksReturnedPathsAgainstContactsAndAnIndependentSearch() {
+        long a = people.create("A").id();
+        long b = people.create("B").id();
+        long c = people.create("C").id();
+        long d = people.create("D").id();
+        long e = people.create("E").id();
+        long f = people.create("F").id();
+        connections.connect(a, b);
+        connections.connect(b, c);
+        connections.connect(c, d);
+        connections.connect(d, e);
+        connections.connect(e, f);
+        connections.connect(a, c);
+
+        long p = people.create("P").id();
+        long q = people.create("Q").id();
+        long r = people.create("R").id();
+        long s = people.create("S").id();
+        connections.connect(p, q);
+        connections.connect(p, r);
+        connections.connect(q, s);
+        connections.connect(r, s);
+
+        long isolated = people.create("Z").id();
+
+        assertAgreesWithContacts(a, a);
+        assertAgreesWithContacts(a, d);
+        assertAgreesWithContacts(a, e);
+        assertAgreesWithContacts(a, f);
+        assertAgreesWithContacts(b, f);
+        assertAgreesWithContacts(p, s);
+        assertAgreesWithContacts(a, isolated);
+    }
+
+    /**
+     * The distance oracle reads only public contact lists and does not stop at three hops.
+     * A returned path must be a real walk of that distance, or disconnected when the walk is longer.
+     */
+    private void assertAgreesWithContacts(long from, long to) {
+        int distance = distanceThroughContacts(from, to);
+        PathResult result = paths.shortestPath(from, to);
+        if (distance < 0 || distance > Limits.MAX_HOPS) {
+            assertFalse(result.connected());
+            assertNull(result.hops());
+            assertNull(result.path());
+            return;
+        }
+
+        assertTrue(result.connected());
+        assertEquals(distance, result.hops());
+        List<Person> path = result.path();
+        assertEquals(distance, path.size() - 1);
+        assertEquals(from, path.get(0).id());
+        assertEquals(to, path.get(path.size() - 1).id());
+        for (int index = 1; index < path.size(); index++) {
+            long previous = path.get(index - 1).id();
+            long next = path.get(index).id();
+            boolean linked = connections.contacts(previous).stream().anyMatch(person -> person.id() == next);
+            assertTrue(linked, previous + " has no direct contact " + next);
+        }
+    }
+
+    private int distanceThroughContacts(long from, long to) {
+        record Step(long id, int depth) {
+        }
+        ArrayDeque<Step> queue = new ArrayDeque<>();
+        Set<Long> seen = new HashSet<>();
+        queue.add(new Step(from, 0));
+        seen.add(from);
+        while (!queue.isEmpty()) {
+            Step current = queue.removeFirst();
+            if (current.id == to) {
+                return current.depth;
+            }
+            for (Person neighbor : connections.contacts(current.id)) {
+                if (seen.add(neighbor.id())) {
+                    queue.addLast(new Step(neighbor.id(), current.depth + 1));
+                }
+            }
+        }
+        return -1;
     }
 }
