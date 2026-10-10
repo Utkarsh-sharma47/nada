@@ -107,6 +107,16 @@ class ApiServerTest {
             assertEquals(1L, created.body.get("id").asLong());
             assertEquals(201, post("/people", "{\"name\":\"Rohan\"}\n").status);
         }
+
+        @Test
+        void rejectsASecondJsonValueAndAcceptsTrailingWhitespace() throws Exception {
+            assertError(400, "invalid JSON", post("/people", "{\"name\":\"Asha\"}{\"name\":\"Other\"}"));
+
+            HttpResult created = post("/people", "{\"name\":\"Asha\"} \n\t");
+            assertEquals(201, created.status);
+            assertEquals(1L, created.body.get("id").asLong());
+            assertEquals("Asha", created.body.get("name").asText());
+        }
     }
 
     @Nested

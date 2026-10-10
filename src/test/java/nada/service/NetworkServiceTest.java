@@ -11,6 +11,9 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -139,5 +142,42 @@ class NetworkServiceTest {
         assertFalse(paths.shortestPath(a, b).connected());
         assertEquals(0, paths.shortestPath(b, b).hops());
         assertEquals(List.of(), connections.contacts(a));
+    }
+
+    @Test
+    void namesTheMissingPersonDecidedWhileAnotherCreateWaitsOutsideTheLock() throws Exception {
+        CountDownLatch connectMayStart = new CountDownLatch(1);
+        AtomicReference<NotFoundException> error = new AtomicReference<>();
+        CountDownLatch done = new CountDownLatch(1);
+        Thread connectThread = new Thread(() -> {
+            try {
+                connectMayStart.await();
+                connections.connect(1L, 2L);
+            } catch (NotFoundException exception) {
+                error.set(exception);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+            } finally {
+                done.countDown();
+            }
+        });
+        connectThread.start();
+
+        repository.read(graph -> {
+            connectMayStart.countDown();
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+            while (connectThread.getState() != Thread.State.BLOCKED) {
+                if (!connectThread.isAlive() || System.nanoTime() > deadline) {
+                    throw new AssertionError("connection did not wait on the repository lock");
+                }
+                Thread.onSpinWait();
+            }
+            people.create("Asha");
+            return null;
+        });
+
+        assertTrue(done.await(2, TimeUnit.SECONDS));
+        assertEquals("no person 2", error.get().getMessage());
+        assertEquals(List.of(), connections.contacts(1L));
     }
 }
