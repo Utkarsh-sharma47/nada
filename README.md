@@ -1,358 +1,126 @@
-# Nada people and connections API
+# Nada
 
-Small HTTP API for the Nada backend intern assignment. It stores people and the people they know, then answers whether two people are connected by a shortest path of at most three hops.
+In-memory HTTP API for people, mutual connections, and shortest paths of at most three hops.
 
-Nada uses that kind of path to describe how two families already know each other.
+## Quick start
+
+Install JDK 17 or newer so both `java` and `javac` are on your `PATH`. Maven does not need to be installed separately.
+
+```bash
+git clone https://github.com/sharma-Utkarsh-47/nada.git
+cd nada
+./start.sh
+```
+
+Open [http://localhost:8080/](http://localhost:8080/).
+
+`./start.sh` checks the JDK, downloads dependencies with `./mvnw`, runs the tests, builds `target/nada.jar`, and starts the server in the foreground. Ctrl+C stops it. If a step fails, the script exits non-zero and does not start the server.
+
+Another port:
+
+```bash
+./start.sh 9090
+```
+
+Open [http://localhost:9090/](http://localhost:9090/). If the port is already in use, the script stops and tells you how to pick a different one. It does not kill the other process.
+
+## API
+
+| Method | Path | Success |
+| --- | --- | --- |
+| `POST` | `/people` | 201 `{"id":1,"name":"Asha"}` |
+| `POST` | `/knows` | 204, empty body |
+| `GET` | `/people/{id}/contacts` | 200, a JSON array |
+| `GET` | `/path?from={id}&to={id}` | 200, a path result |
+
+There is no people-list endpoint and no database. Person ids start at 1 and are chosen by the server. Names are stored exactly as sent, including Hindi and other scripts. A connection is mutual and can be sent again. The path search returns a shortest path of at most three hops, or `{"connected":false}` when none exists.
+
+| Status | When |
+| --- | --- |
+| 400 | Invalid JSON, a missing field, a blank name, a self-connection, or a bad id or query parameter |
+| 404 | Unknown person, for example `{"error":"no person 9"}`, or an unknown route `{"error":"not found"}` |
+| 405 | The path exists, but the method is not allowed |
+
+```bash
+curl -sS -X POST http://localhost:8080/people -H 'Content-Type: application/json' -d '{"name":"Asha"}'
+curl -sS -X POST http://localhost:8080/people -H 'Content-Type: application/json' -d '{"name":"आशा"}'
+curl -sS -X POST http://localhost:8080/knows -H 'Content-Type: application/json' -d '{"a":1,"b":2}'
+curl -sS http://localhost:8080/people/1/contacts
+curl -sS 'http://localhost:8080/path?from=1&to=2'
+```
+
+The same person is zero hops: `{"connected":true,"hops":0,"path":[...]}`. In a chain `A-B-C-D-E` with no shortcut, `A` to `D` is connected in 3 hops and `A` to `E` is not.
 
 ## Features
 
 - Create a person and let the server assign the id.
-- Record a mutual, undirected connection. Sending it again is safe.
-- List a person's direct contacts.
-- Find a shortest path of at most three hops, or report that none exists.
+- Record a mutual connection. Sending it again is safe.
+- List a person's direct contacts, in the order they were first recorded.
+- Find a shortest path of at most three hops.
+- Open `/` for a small page that calls those endpoints.
 
-## Stack
+## Testing page
 
-- Java 17 or newer (compiled with `--release 17`; verified with JDK 21)
-- Maven 3.9 or newer
-- Jackson for JSON
-- The JDK `com.sun.net.httpserver.HttpServer`
-- JUnit 5
+`/` serves a plain HTML page. Its CSS and JavaScript are `/assets/app.css` and `/assets/app.js`. The page creates people, loads contacts, records connections, and draws the path returned by `GET /path`. It does not invent results.
 
-Data stays in memory. There is no database, Neo4j, or extra framework.
-
-## Architecture
-
-| Package | Responsibility |
-| --- | --- |
-| `nada.model` | `Person`, path results, and error bodies |
-| `nada.repository` | In-memory people and the undirected contact graph |
-| `nada.service` | Creating people, recording connections, and bounded shortest-path search |
-| `nada.http` | Routing, JSON parsing, validation, and responses |
-| `nada.error` | `400` and `404` exceptions mapped to one JSON error shape |
-
-`Limits.MAX_HOPS` is the only hop limit. The repository lock is the only write path for people and edges, so the two cannot diverge.
-
-```mermaid
-flowchart LR
-  Client[HTTP client] --> Server[ApiServer]
-  Server --> People[PersonService]
-  Server --> Connections[ConnectionService]
-  Server --> Paths[PathService]
-  People --> Repository[InMemoryNetworkRepository]
-  Connections --> Repository
-  Paths --> Repository
-  Repository --> Store[(In-memory people and graph)]
-```
-
-```mermaid
-flowchart TD
-  Request[HTTP request] --> Route{Known route and method?}
-  Route -->|no| NotFound[404 JSON error]
-  Route -->|yes| Parse[Parse JSON or query parameters]
-  Parse -->|invalid| Bad[400 JSON error]
-  Parse -->|unknown person| Missing[404 JSON error]
-  Parse -->|valid| Service[Service call]
-  Service --> Store[Read or update the in-memory graph]
-  Store --> Write[Serialize the response]
-  Write --> Response[HTTP response]
-```
-
-```mermaid
-flowchart TD
-  Start[Look up from and to] --> Exists{Both people exist?}
-  Exists -->|no| Missing[404 no person]
-  Exists -->|yes| Same{from equals to?}
-  Same -->|yes| Zero["connected true, hops 0, path is that person"]
-  Same -->|no| Queue[Enqueue from at depth 0 and mark it seen]
-  Queue --> Empty{Queue empty?}
-  Empty -->|yes| No[connected false]
-  Empty -->|no| Pop[Take the next person]
-  Pop --> Limit{Depth equals 3?}
-  Limit -->|yes| Empty
-  Limit -->|no| Next[Visit each unseen neighbor]
-  Next --> Found{Neighbor is to?}
-  Found -->|yes| Yes[Rebuild the path. Hops equals the number of edges]
-  Found -->|no| Enqueue[Enqueue the neighbor at depth plus 1]
-  Enqueue --> Empty
-```
-
-Breadth-first search finds a shortest path in an unweighted graph. Nodes at depth 3 are not expanded, so a fourth hop is never explored. A seen-set stops cycles.
+The people table lists only people created in that browser session. The server has no list endpoint, so the table is not the full database. Restarting the server drops every person; clearing the local list does not.
 
 ## Prerequisites
 
-- JDK 17 or newer (`java` and `javac` on your `PATH`). A JRE is not enough.
-- `curl`, for the smoke script.
-- Git.
+- JDK 17 or newer. A JRE is not enough, because the build needs `javac`.
+- `curl`, for `make smoke`.
 
-Maven itself does not need to be installed. `./mvnw` downloads Maven 3.9.9 on first use.
+Check with `java -version` and `javac -version`. On Ubuntu, `sudo apt install openjdk-21-jdk-headless` installs a suitable JDK. If `java` is present but `javac` is not, the `java` command is probably a JRE.
 
-Check the JDK:
+`./start.sh` uses `./mvnw`, which downloads Maven 3.9.9 on first use. It does not install packages or change system configuration.
 
-```bash
-java -version
-javac -version
-```
-
-`make setup` runs the same check and prints the wrapper's Maven version.
-
-## Build and run
+## Manual build and test
 
 From the repository root:
 
 ```bash
-./mvnw -B -DskipTests package
-java -jar target/nada.jar
-```
-
-`./mvnw -B package` runs the tests before building the jar. The server listens on port **8080** and prints:
-
-```text
-Nada server listening on http://localhost:8080
-```
-
-Stop it with Ctrl+C. The shutdown hook closes the server. People and connections are stored in memory, so a restart clears them.
-
-If port 8080 is already taken, the process prints `Could not start server on port 8080: Address already in use` and exits. Start it on another port:
-
-```bash
-java -jar target/nada.jar 9090
-```
-
-### Port
-
-The first command-line argument wins, then the `PORT` environment variable, then `8080`.
-
-```bash
-java -jar target/nada.jar 9090
-PORT=9090 java -jar target/nada.jar
-```
-
-`java -jar target/nada.jar 9090` uses 9090 even if `PORT` is set. An invalid port prints `Port must be an integer between 0 and 65535` and exits with status 1.
-
-### Make targets
-
-| Target | What it does |
-| --- | --- |
-| `make setup` | Checks for a JDK and prints `./mvnw -version` |
-| `make build` | Packages `target/nada.jar` without tests |
-| `make test` | Runs the JUnit suite |
-| `make verify` | Runs the test suite and packages the jar |
-| `make run` | Builds the jar and starts the server on port 8080 |
-| `make smoke` | Builds the jar and runs `scripts/smoke.sh` |
-| `make clean` | Deletes `target/` |
-
-## Tests
-
-JUnit 5 starts its own servers. You do not need a server running for `make test`.
-
-```bash
 ./mvnw -B test
 ./mvnw -B verify
+./mvnw -B -DskipTests package
+java -jar target/nada.jar
+make smoke
 ```
 
-GitHub Actions runs `./mvnw -B verify` on Temurin 17 for each push and pull request.
+`java -jar target/nada.jar 9090` uses that port. With no argument, the `PORT` environment variable is used, then `8080`. `./start.sh` always passes its port on the command line, so that choice wins over `PORT`.
 
-HTTP integration tests bind an ephemeral port:
+`make smoke` builds the jar, starts it on port 18080 (or `PORT`), checks the homepage, static assets, and the four API calls, then stops only the process it started.
 
-```bash
-./mvnw -B -Dtest=ApiServerTest test
+## Architecture
+
+`nada.http.ApiServer` is the JDK HTTP server. `PersonService`, `ConnectionService`, and `PathService` sit on one in-memory repository. The repository lock is the only write path for people and edges. `Limits.MAX_HOPS` is 3. Breadth-first search stops at that depth.
+
+`GET /` and the two asset paths serve files from the jar. Every other unknown route still returns JSON `{"error":"not found"}`.
+
+```mermaid
+flowchart LR
+  Browser[Browser at /] --> Server[ApiServer]
+  Client[HTTP client] --> Server
+  Server --> Files[index.html, CSS, and JS]
+  Server --> API[people, knows, contacts, path]
+  API --> Memory[(In-memory graph)]
 ```
-
-`make smoke` is separate. It starts `target/nada.jar` on port 18080 (or `PORT`), calls the four endpoints with `curl`, then stops only the process it started. The JUnit suite does not use that script.
-
-## API
-
-Request and response bodies are JSON, encoded as UTF-8. Successful and error responses from the application use `Content-Type: application/json; charset=UTF-8`. `POST /knows` returns an empty body. The examples are separate illustrations of each response, not one continuous session.
-
-| Status | When |
-| --- | --- |
-| 201 | A person was created |
-| 204 | A connection was recorded, including a duplicate |
-| 200 | Contacts or a path result |
-| 400 | Invalid JSON, a missing or invalid field, a blank name, a self-connection, or a bad query parameter |
-| 404 | The person id is unknown |
-| 405 | The path exists but the method is not supported |
-
-Application errors use `{"error":"..."}`. An unknown id `9` is exactly `{"error":"no person 9"}`.
-
-### `POST /people`
-
-Creates a person. The server assigns the id, starting at 1. A client-supplied `id` is ignored. The name is stored exactly as sent, including Hindi and other scripts. A name that is missing, not a string, empty, or whitespace-only is rejected.
-
-```bash
-curl -sS -D - -X POST http://localhost:8080/people \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"Asha"}'
-```
-
-```http
-HTTP/1.1 201 Created
-Content-Type: application/json; charset=UTF-8
-
-{"id":1,"name":"Asha"}
-```
-
-```bash
-curl -sS -X POST http://localhost:8080/people \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"आशा"}'
-```
-
-```json
-{"id":2,"name":"आशा"}
-```
-
-```bash
-curl -sS -D - -X POST http://localhost:8080/people \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"  "}'
-```
-
-```http
-HTTP/1.1 400 Bad Request
-
-{"error":"name must not be blank"}
-```
-
-Other person errors: `invalid JSON`, `name is required`, `name must be a string`.
-
-### `POST /knows`
-
-Creates one undirected connection. Both people must exist, and `a` must not equal `b`. Repeating the pair, in either order, returns 204 and does not add another contact.
-
-```bash
-curl -sS -D - -X POST http://localhost:8080/knows \
-  -H 'Content-Type: application/json' \
-  -d '{"a":1,"b":2}'
-```
-
-```http
-HTTP/1.1 204 No Content
-```
-
-```bash
-curl -sS -X POST http://localhost:8080/knows \
-  -H 'Content-Type: application/json' \
-  -d '{"a":1,"b":1}'
-```
-
-```json
-{"error":"a person cannot be connected to themselves"}
-```
-
-```bash
-curl -sS -X POST http://localhost:8080/knows \
-  -H 'Content-Type: application/json' \
-  -d '{"a":1,"b":9}'
-```
-
-```json
-{"error":"no person 9"}
-```
-
-Missing fields produce `a is required` or `b is required`. A non-integer value produces `a must be an integer` or `b must be an integer`.
-
-### `GET /people/{id}/contacts`
-
-Returns the direct contacts in the order each connection was first recorded for that person. A person with no contacts gets an empty array. Indirect contacts are not included.
-
-After Asha (1) knows Rohan (2):
-
-```bash
-curl -sS http://localhost:8080/people/1/contacts
-```
-
-```json
-[{"id":2,"name":"Rohan"}]
-```
-
-A person who exists and has no contacts gets:
-
-```json
-[]
-```
-
-```bash
-curl -sS http://localhost:8080/people/9/contacts
-```
-
-```json
-{"error":"no person 9"}
-```
-
-A non-integer id, such as `/people/abc/contacts`, returns 400 `{"error":"person id must be an integer"}`.
-
-### `GET /path?from={id}&to={id}`
-
-Returns the shortest path of **at most three hops**. Hops are edges, not people. If several paths have the same length, any one of them may be returned. If the people exist but every path is longer than three hops, or there is no path, the body is `{"connected":false}`.
-
-The same existing person is a zero-hop path:
-
-```bash
-curl -sS 'http://localhost:8080/path?from=1&to=1'
-```
-
-```json
-{"connected":true,"hops":0,"path":[{"id":1,"name":"Asha"}]}
-```
-
-A two-hop path:
-
-```bash
-curl -sS 'http://localhost:8080/path?from=1&to=5'
-```
-
-```json
-{"connected":true,"hops":2,"path":[{"id":1,"name":"Asha"},{"id":3,"name":"Meera"},{"id":5,"name":"Kabir"}]}
-```
-
-In a chain `A - B - C - D - E` with no shortcut, `A` to `D` is connected in 3 hops. `A` to `E` is not:
-
-```json
-{"connected":false}
-```
-
-Missing, empty, or non-numeric `from` or `to` returns 400, for example `{"error":"from is required"}` or `{"error":"to must be an integer"}`. An unknown person returns 404 `{"error":"no person 5"}`. A route this server does not implement returns 404 `{"error":"not found"}`. Both parameters are checked as integers before either id is looked up. If both ids are unknown, the error names `from`.
-
-## Storage
-
-People and connections live in the process heap. Restarting the server drops all of them, and the next person starts at id 1 again. Nothing is written to disk.
-
-## Design decisions
-
-- Person ids are positive `long` values, start at 1, and are never reused. Only a successful create consumes an id.
-- A connection is two adjacency entries updated together under one lock. Concurrent requests cannot see a one-sided edge.
-- The first time a pair is recorded decides its position in each contact list. A later duplicate, including the reversed pair, does not move or duplicate it.
-- A self-connection (`a == b`) is 400 even when that id does not exist.
-- Blank means Java `String.isBlank()`. A non-blank name is not trimmed.
-- Extra JSON fields are ignored. Request bodies are UTF-8 and are refused above 64 KiB.
-- Path search is breadth-first and stops at three hops. Neighbor order follows contact insertion order, so the chosen shortest path is stable for a given sequence of connections.
-- The server binds all interfaces. The printed URL uses `localhost`.
-- A single trailing slash on a route is accepted.
 
 ## Known limitations
 
-- There is no authentication, pagination, or persistence.
-- Graph updates share one lock. That keeps the graph consistent; it is not a claim about production throughput.
+- Nothing is persisted. A restart clears people and connections, and ids start at 1 again.
+- There is no authentication, pagination, or `GET /people`.
 - The hop limit is fixed at three.
-- A request target with illegal percent-encoding, such as `%ZZ`, is rejected by the JDK HTTP server with an HTML `400` before this application can write JSON. A negative `Content-Length` is rejected the same way. Query values that are merely missing or not integers still get a JSON `400`.
-- The jar is a small take-home service, not a production deployment.
+- The testing page can send ids only up to JavaScript's safe integer range. `curl` can still send any `long`.
+- The page's people table is session-local. Server state is authoritative.
+- A request target with illegal percent-encoding, such as `%ZZ`, is rejected by the JDK HTTP server with an HTML 400 before this application can write JSON.
+- One shared lock keeps the graph consistent. That is not a production throughput claim.
 
 ## With more time
 
 - Persist people and connections so a restart does not wipe the graph.
-- Publish an OpenAPI description and structured request logs.
-- Make the hop limit configurable and paginate large contact lists.
-- Add a focused load test around id allocation and connection updates.
-
-## Troubleshooting
-
-- `java` works but `javac` does not: install a JDK, not only a JRE.
-- `Address already in use`: another process owns that port. Use `java -jar target/nada.jar 9090`.
-- `./mvnw` fails on first run: it needs network access once to download Maven into `~/.m2/wrapper`.
-- Smoke test says the port is in use: `PORT=18081 make smoke`.
+- Add an explicit people-list endpoint and paginate large contact lists.
+- Make the hop limit configurable, and publish an OpenAPI description.
 
 ## AI tools
 
-Cursor's coding assistant (Auto) wrote this service, its tests, the Maven wrapper setup, the Makefile, the smoke script, and this README from the assignment brief. A later pass added the GitHub Actions workflow, the private smoke-test output file, and an independent shortest-path check. Behavior was checked with `./mvnw -B test`, `./mvnw -B verify`, and `scripts/smoke.sh`. Failures from those runs were fixed before the corresponding commits.
+Cursor's coding assistant (Auto) wrote this service, its tests, the Maven wrapper, the Makefile, the smoke script, the testing page, `start.sh`, and this README from the assignment brief. Behavior was checked with `./mvnw -B test`, `./mvnw -B verify`, `make smoke`, `./start.sh`, and the testing page in a browser.
