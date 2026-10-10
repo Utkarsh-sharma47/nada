@@ -137,7 +137,7 @@ PORT=9090 java -jar target/nada.jar
 | `make setup` | Checks for a JDK and prints `./mvnw -version` |
 | `make build` | Packages `target/nada.jar` without tests |
 | `make test` | Runs the JUnit suite |
-| `make verify` | Clean verify, including tests |
+| `make verify` | Runs the test suite and packages the jar |
 | `make run` | Builds the jar and starts the server on port 8080 |
 | `make smoke` | Builds the jar and runs `scripts/smoke.sh` |
 | `make clean` | Deletes `target/` |
@@ -150,6 +150,8 @@ JUnit 5 starts its own servers. You do not need a server running for `make test`
 ./mvnw -B test
 ./mvnw -B verify
 ```
+
+GitHub Actions runs `./mvnw -B verify` on Temurin 17 for each push and pull request.
 
 HTTP integration tests bind an ephemeral port:
 
@@ -334,7 +336,7 @@ People and connections live in the process heap. Restarting the server drops all
 - There is no authentication, pagination, or persistence.
 - Graph updates share one lock. That keeps the graph consistent; it is not a claim about production throughput.
 - The hop limit is fixed at three.
-- A request target with illegal percent-encoding, such as `%ZZ`, is rejected by the JDK HTTP server with an HTML `400` before this application can write JSON. Query values that are merely missing or not integers still get a JSON `400`.
+- A request target with illegal percent-encoding, such as `%ZZ`, is rejected by the JDK HTTP server with an HTML `400` before this application can write JSON. A negative `Content-Length` is rejected the same way. Query values that are merely missing or not integers still get a JSON `400`.
 - The jar is a small take-home service, not a production deployment.
 
 ## With more time
@@ -353,4 +355,4 @@ People and connections live in the process heap. Restarting the server drops all
 
 ## AI tools
 
-Cursor's coding assistant (Auto) wrote this service, its tests, the Maven wrapper setup, the Makefile, the smoke script, and this README from the assignment brief. Behavior was checked with `./mvnw -B test`, `./mvnw -B verify`, and `scripts/smoke.sh`. Failures from those runs were fixed before the corresponding commits.
+Cursor's coding assistant (Auto) wrote this service, its tests, the Maven wrapper setup, the Makefile, the smoke script, and this README from the assignment brief. A later pass added the GitHub Actions workflow, the private smoke-test output file, and an independent shortest-path check. Behavior was checked with `./mvnw -B test`, `./mvnw -B verify`, and `scripts/smoke.sh`. Failures from those runs were fixed before the corresponding commits.
