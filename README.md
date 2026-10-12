@@ -5,7 +5,7 @@ In-memory HTTP API for people, mutual connections, and shortest paths of at most
 ## Quick start
 
 ```bash
-git clone https://github.com/sharma-Utkarsh-47/nada.git
+git clone https://github.com/Utkarsh-sharma47/nada.git
 cd nada
 ./start.sh
 ```
